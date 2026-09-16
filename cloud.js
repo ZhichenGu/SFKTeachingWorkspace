@@ -43,5 +43,6 @@ window.SFKCloud = (() => {
     remove:id=>rpc('delete_lesson',{p_id:id}),
     publish:id=>rpc('publish_lesson',{p_id:id}),getShared:token=>rpc('get_shared_lesson',{p_token:token}),submit:(token,signature)=>rpc('submit_lesson_signature',{p_token:token,p_signature:signature}),
     async listTeachers(){const rows=await request('/rest/v1/teachers?select=id,name&order=name');return rows;},
-    addTeacher:name=>rpc('add_teacher',{p_name:name})};
+    addTeacher:name=>rpc('add_teacher',{p_name:name}),
+    async ocrSchedule(image){if(!configured)throw Error('请先按 README 配置 Supabase。');const res=await fetch(url+'/functions/v1/ocr-schedule',{method:'POST',headers:{'Content-Type':'application/json',apikey:config.supabasePublishableKey,'Authorization':'Bearer '+config.supabasePublishableKey},body:JSON.stringify({image})});const data=await res.json().catch(()=>null);if(!res.ok)throw Error(data?.error||'OCR 调用失败，请重试。');return data;}};
 })();

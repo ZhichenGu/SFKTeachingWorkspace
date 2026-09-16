@@ -155,7 +155,7 @@ window.SFKBatch=(()=>{
     $('b-mentor').value=defaults.teacherName||'';
     if(!rows.length){rows=[newRow()];pageIndex=0;}
     document.querySelector('main.layout').hidden=true;
-    const dash=document.getElementById('dashboard');if(dash)dash.hidden=true;
+    const dash=document.getElementById('dashboard');if(dash)dash.hidden=true;if(window.SFKOCR&&SFKOCR.view)SFKOCR.view.hidden=true;
     view.hidden=false;
     document.querySelector('h1').textContent='批量新建签单';
     draw();loadNames();status(cloud.configured?'':'本地预览：记录保存在此浏览器，无法生成远程链接。');

@@ -50,7 +50,7 @@ window.SFKUser=(()=>{
     view.hidden=false;
     const dash=document.getElementById('dashboard');if(dash)dash.hidden=true;
     document.querySelector('main.layout').hidden=true;
-    if(window.SFKBatch&&SFKBatch.view)SFKBatch.view.hidden=true;
+    if(window.SFKBatch&&SFKBatch.view)SFKBatch.view.hidden=true;if(window.SFKOCR&&SFKOCR.view)SFKOCR.view.hidden=true;
     document.querySelector('h1').textContent='选择使用身份';
     $('us-status').textContent='';updateChip();
     $('us-recent').replaceChildren();$('us-list').replaceChildren();

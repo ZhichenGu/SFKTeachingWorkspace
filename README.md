@@ -15,14 +15,33 @@
 
 ## 使用
 
-- 首页：按学生姓名搜索；按「导师」下拉筛选（来自记录里的「导师姓名」独立字段，与签名方式无关，不同老师各看各的）；按日期范围筛选；按上课时间或姓名排列；查看“待签名 / 已签名”。
-- 新建：依次填写课程类型、学生姓名、上课内容、课后作业、导师签名；其他课次与日期时间字段在后面。默认日期取设备当地日期，时间每半小时一档。
-- 点击“生成学生签名链接”会先保存记录。非关键空项不拦截生成，学生签名不作为发出链接前的必填项。学生姓名用于管理检索，需要填写。
-- 学生专用链接直接展示对应记录和签名按钮。链接有效期 30 天；每份记录只接受一次学生签名提交。重复请求不会覆盖已有签名。专用页面是便捷入口，不是独立权限隔离：打开主站的任何人仍可管理全部记录。
-- 老师修改已签名的课程内容或导师签名并保存后，旧学生签名清空、旧链接失效；重新生成链接请学生确认。教师签名未变的重复保存不会使链接失效。
-- 删除按钮只确认一次；删除后记录、签名和链接均失效，不可恢复。可先下载留档。
-- 勾选多份记录，或全选当前筛选结果，点击“批量下载图片 ZIP”。每份 PNG 以学生姓名、日期和短编号命名。个别文字溢出或请求失败的记录会列出原因，其余文件继续下载。批量下载使用保存后的记录，未保存的编辑不包含在内。
-- PNG 和浏览器打印 PDF 使用同一个 A4 版式。超出 A4 可容纳范围的文字会提示缩短，不能静默截断。留空字段可以继续导出。
+### 教师身份选择
+
+- 每次打开网站先进入「选择使用身份」页：列出已创建的教师、`＋ Add User` 新增、`访客模式`。
+- 选择教师后进入个人工作台：**只显示该教师自己的签单**（按 `teacher_id` 隔离，不靠姓名）。
+- 右上角常显当前教师姓名，点击可「切换用户」回选择页；最近使用的教师记录在 `localStorage`、并置顶。
+- 选中教师后，新建/批量/OCR 签单的「导师姓名」默认填入当前教师，教师签名默认用其姓名生成手写体；仍可手动改。访客模式保持自由填写。
+- 这是轻量身份层，**没有账号/密码/权限系统**；教师名单存 Supabase `teachers` 表（共享），新增教师用校验 RPC。
+
+### 课表识别新建（OCR）
+
+第三个新建入口。上传课表截图（JPG/JPEG/PNG，点击或拖拽）→ 调 Supabase Edge Function 转 Google Cloud Vision（`DOCUMENT_TEXT_DETECTION`）→ 前端按文字位置解析成课程行 → 人工确认/修改/增删 → 填写内容（可「应用到全部」）→ 批量生成签单链接（复用现有保存与链接逻辑）。
+
+- OCR 结果必须人工确认，不确定的字段留空，不自动编造；学生姓名未确认前不允许生成。
+- 课表含多个教师时，默认「仅显示我的课程」（按 `currentUser.name` 匹配），可切换「显示全部」。
+- 批量生成支持部分失败：显示成功/失败条数，可「仅重试失败项」，不重复创建已成功的签单。
+
+#### Google Cloud Vision 配置（后端）
+
+前端不持有 Google 凭证；凭证放在 Supabase Secrets，仅 Edge Function 使用。
+
+1. [Google Cloud Console](https://console.cloud.google.com) 新建/选择项目，启用 **Cloud Vision API**。
+2. 创建 API Key（APIs & Services → Credentials → Create credentials → API key）。
+3. 在 Supabase 项目把 Key 存为 Secret：`supabase secrets set GOOGLE_VISION_API_KEY=你的key --project-ref <ref>`。
+4. 部署 Edge Function：`supabase functions deploy ocr-schedule --project-ref <ref>`。
+5. 验证：上传一张课表截图点「开始识别」，能进入识别结果即成功；缺 Key 会提示「OCR 尚未配置」。
+
+> 未配置 Secret 前，其余功能（身份选择、上传 UI、解析、确认、批量生成）均已可用，仅真实 OCR 调用会被阻断。
 
 ## 批量填写（一次一批）
 
@@ -67,14 +86,17 @@
 | `sharing.js` | 高频字段排序、记录装载、学生只读查看与提交流程 |
 | `workspace.js` | 公开管理页、列表检索排序、多选、保存、自动刷新、删除、常用默认值与自动保存 |
 | `batch.js` | 批量填写（表格/卡片分页）、行操作、姓名联想、批量生成链接与复制 |
+| `users.js` | 教师身份选择页、Add User、访客模式、右上角当前教师与切换、最近使用记忆 |
+| `ocr.js` | 课表识别：上传/预览、解析、结果确认（编辑/增删/筛选）、内容填充、批量生成与复制 |
 | `fonts.js` | 自托管正文字体 `@font-face`、字体加载完成后重绘 |
 | `fonts/` | `NotoSerifSC-subset.woff2` 与 `OFL.txt` 许可 |
-| `cloud.js` | Supabase HTTP 调用、签名压缩与固化、读入数据校验 |
+| `cloud.js` | Supabase HTTP 调用、签名压缩与固化、读入数据校验、`ocrSchedule` |
 | `exports.js` | 按记录生成 PNG、无第三方依赖的 UTF-8 ZIP 打包 |
 | `config.js` | 网站地址与公开 Supabase 配置 |
-| `supabase.sql` | 数据表、公开读取 RLS、写入校验 RPC、版本冲突检查、链接有效期 |
+| `supabase/functions/ocr-schedule/index.ts` | Edge Function：调 Google Cloud Vision，凭证用 Secret `GOOGLE_VISION_API_KEY` |
+| `supabase.sql` | 数据表（含 `teachers`、`lesson_records.teacher_id`）、公开读取 RLS、写入校验 RPC、版本冲突检查、链接有效期 |
 
-数据主对象包括 `schemaVersion`、`studentName`、`courseName`、`lessonDate`、`lessonNumber`、`checkIn`、`checkOut`、`content`、`homework`、`previousHomework`、`signatures.student/mentor`。表单中保留签名三种方式的草稿；入库只保留当前选中方式。数据库使用 `revision` 避免旧页面覆盖学生刚提交的签名；遇到冲突先显示错误，不强制覆盖。
+数据主对象包括 `schemaVersion`、`studentName`、`courseName`、`lessonDate`、`lessonNumber`、`checkIn`、`checkOut`、`content`、`homework`、`previousHomework`、`teacherName`、`signatures.student/mentor`。表单中保留签名三种方式的草稿；入库只保留当前选中方式。数据库使用 `revision` 避免旧页面覆盖学生刚提交的签名；遇到冲突先显示错误，不强制覆盖。教师身份用 `teachers` 表（id + name），签单用 `lesson_records.teacher_id` 关联教师做数据隔离。
 
 `polishService.provider` 是未来 AI 润色接入点：输入字段、原文、课程上下文和取消信号，返回建议文字。当前没有任何 AI API 调用、模型名依赖或密钥。未来应由服务端保管模型密钥，建议文字由老师采用后再写回字段。
 
