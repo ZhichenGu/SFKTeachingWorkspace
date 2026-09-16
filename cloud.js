@@ -25,7 +25,7 @@ window.SFKCloud = (() => {
   }
   async function compactSignature(s){
     const clean=blankSignature();if(s.loading)throw Error('签名图片仍在处理，请稍后重试。');
-    if(s.mode==='text'){clean.text=s.text;return clean;}if(!signaturePresent(s))return clean;clean.mode='image';
+    if(s.mode==='text'){if(!(s.text||'').trim())return clean;const c=document.createElement('canvas');c.width=560;c.height=200;const x=c.getContext('2d');x.fillStyle='white';x.fillRect(0,0,560,200);x.fillStyle='#111';x.textAlign='center';x.textBaseline='middle';x.font='italic '+Math.max(40,Math.min(120,Math.floor(520/Math.max(1,Array.from(s.text).length))))+'px '+handFont;x.fillText(s.text,280,100);clean.mode='image';clean.image=await smallImage(c.toDataURL('image/png'));return clean;}if(!signaturePresent(s))return clean;clean.mode='image';
     if(s.mode==='image')clean.image=bytes(s.image)<=MAX_IMAGE?s.image:await smallImage(s.image);
     else{const c=document.createElement('canvas');c.width=600;c.height=300;const ctx=c.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,600,300);ctx.strokeStyle='#111';ctx.fillStyle='#111';ctx.lineWidth=3.4;ctx.lineCap='round';ctx.lineJoin='round';s.strokes.forEach(points=>{ctx.beginPath();if(points.length===1){ctx.arc(points[0][0]*600,points[0][1]*300,1.7,0,Math.PI*2);ctx.fill();}else{points.forEach((p,i)=>ctx[i?'lineTo':'moveTo'](p[0]*600,p[1]*300));ctx.stroke();}});clean.image=await smallImage(c.toDataURL('image/png'));}return clean;
   }
@@ -38,7 +38,7 @@ window.SFKCloud = (() => {
   }
   return {configured,compactSignature,compactRecord,cleanRecord,
     async list(){const rows=[];for(let offset=0;;offset+=1000){const page=await request('/rest/v1/lesson_records?select=id,student_name,lesson_date,check_in,course_name,signed_at,revision,updated_at&order=lesson_date.desc,check_in.desc,id&limit=1000&offset='+offset);rows.push(...page);if(page.length<1000)return rows;}},
-    async get(id){const rows=await request('/rest/v1/lesson_records?id=eq.'+encodeURIComponent(id)+'&select=id,record,revision,signed_at,updated_at');if(!rows?.length)throw Error('没有找到这份签单。');rows[0].record=cleanRecord(rows[0].record);return rows[0];},
+    async get(id){const rows=await request('/rest/v1/lesson_records?id=eq.'+encodeURIComponent(id)+'&select=id,record,revision,signed_at,updated_at,share_token,share_expires_at');if(!rows?.length)throw Error('没有找到这份签单。');rows[0].published=!!(rows[0].share_token&&new Date(rows[0].share_expires_at)>new Date());rows[0].record=cleanRecord(rows[0].record);return rows[0];},
     save:(id,revision,record)=>rpc('save_lesson',{p_id:id,p_expected_revision:revision,p_record:record}),
     remove:id=>rpc('delete_lesson',{p_id:id}),
     publish:id=>rpc('publish_lesson',{p_id:id}),getShared:token=>rpc('get_shared_lesson',{p_token:token}),submit:(token,signature)=>rpc('submit_lesson_signature',{p_token:token,p_signature:signature})};
