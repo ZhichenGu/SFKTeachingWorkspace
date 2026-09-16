@@ -34,7 +34,7 @@ window.SFKCloud = (() => {
   async function compactSignature(s){
     const clean=blankSignature();if(s.loading)throw Error('签名图片仍在处理，请稍后重试。');
     if(s.mode==='text'){clean.text=s.text;return clean;}if(!signaturePresent(s))return clean;clean.mode='image';
-    if(s.mode==='image')clean.image=await smallImage(s.image);
+    if(s.mode==='image')clean.image=bytes(s.image)<=MAX_IMAGE?s.image:await smallImage(s.image);
     else{const c=document.createElement('canvas');c.width=600;c.height=300;const ctx=c.getContext('2d');ctx.fillStyle='white';ctx.fillRect(0,0,600,300);ctx.strokeStyle='#111';ctx.fillStyle='#111';ctx.lineWidth=3.4;ctx.lineCap='round';ctx.lineJoin='round';s.strokes.forEach(points=>{ctx.beginPath();if(points.length===1){ctx.arc(points[0][0]*600,points[0][1]*300,1.7,0,Math.PI*2);ctx.fill();}else{points.forEach((p,i)=>ctx[i?'lineTo':'moveTo'](p[0]*600,p[1]*300));ctx.stroke();}});clean.image=await smallImage(c.toDataURL('image/png'));}return clean;
   }
   async function compactRecord(record){const clone=JSON.parse(JSON.stringify(record));clone.signatures={student:await compactSignature(clone.signatures.student),mentor:await compactSignature(clone.signatures.mentor)};if(new TextEncoder().encode(JSON.stringify(clone)).length>80000)throw Error('记录内容过大，请缩短文字后重试。');return clone;}
@@ -45,7 +45,7 @@ window.SFKCloud = (() => {
     for(const role of ['mentor','student']){const s=raw.signatures?.[role],sig=blankSignature();if(!s||!['text','image'].includes(s.mode))throw Error('签名格式不正确。');sig.mode=s.mode;if(s.mode==='text'){if(typeof s.text!=='string'||s.text.length>24)throw Error('姓名签名格式不正确。');sig.text=s.text;}if(s.mode==='image'&&s.image){if(typeof s.image!=='string'||s.image.length>23000||!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+=*$/.test(s.image))throw Error('图片签名格式不正确。');sig.image=s.image;}clean.signatures[role]=sig;}return clean;
   }
   return {configured,get user(){return session?.user||null;},login,logout,compactSignature,compactRecord,cleanRecord,
-    list:()=>request('/rest/v1/lesson_records?select=id,student_name,lesson_date,check_in,course_name,signed_at,revision,updated_at&order=lesson_date.desc,check_in.desc&limit=1000',{auth:true}),
+    async list(){const rows=[];for(let offset=0;;offset+=1000){const page=await request('/rest/v1/lesson_records?select=id,student_name,lesson_date,check_in,course_name,signed_at,revision,updated_at&order=lesson_date.desc,check_in.desc,id&limit=1000&offset='+offset,{auth:true});rows.push(...page);if(page.length<1000)return rows;}},
     async get(id){const rows=await request('/rest/v1/lesson_records?id=eq.'+encodeURIComponent(id)+'&select=id,record,revision,signed_at,updated_at',{auth:true});if(!rows?.length)throw Error('没有找到这份签单。');rows[0].record=cleanRecord(rows[0].record);return rows[0];},
     save:(id,revision,record)=>rpc('save_lesson',{p_id:id,p_expected_revision:revision,p_record:record},true),
     remove:id=>rpc('delete_lesson',{p_id:id},true),
