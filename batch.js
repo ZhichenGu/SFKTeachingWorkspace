@@ -12,7 +12,7 @@ window.SFKBatch=(()=>{
   const newRow=()=>({key:uid(),id:null,revision:0,studentName:'',courseName:'',lessonDate:'',checkIn:'',checkOut:'',lessonNumber:'',content:'',homework:'',previousHomework:null,status:'new',link:'',error:'',copied:false});
   const copiedIds=()=>{try{return new Set(JSON.parse(localStorage.getItem(COPIED)||'[]'));}catch{return new Set();}};
 
-  let defaults={courseName:'项目课',lessonDate:'',checkIn:'',checkOut:'',mentor:null};
+  let defaults={courseName:'项目课',lessonDate:'',checkIn:'',checkOut:'',mentor:null,teacherName:''};
   let rows=[],pageIndex=0,generating=false;
 
   const style=document.createElement('style');
@@ -26,7 +26,7 @@ window.SFKBatch=(()=>{
    '<div><label for="b-date">上课日期（默认）</label><input id="b-date" type="date"></div>'+
    '<div><label for="b-in">开始时间</label><select id="b-in"></select></div>'+
    '<div><label for="b-out">结束时间</label><select id="b-out"></select></div>'+
-   '<div class="mentor"><label for="b-mentor">导师签名（常用）</label><input id="b-mentor" maxlength="24" placeholder="输入导师姓名，自动带入每份"></div>'+
+   '<div class="mentor"><label for="b-mentor">导师姓名（常用，首页按此检索）</label><input id="b-mentor" maxlength="24" placeholder="输入你的姓名，自动带入每份"></div>'+
    '<div class="mentor-note" id="b-mentor-note"></div></div>'+
    '<div class="batch-list"><div class="batch-pager" id="batch-pager"><button type="button" id="pg-prev">上一份</button><span id="pg-count" class="batch-status">第 1 / 1 份</span><button type="button" id="pg-next">下一份</button><button type="button" id="pg-add">＋ 新增</button></div><div class="batch-head"><span>学生姓名</span><span>上课内容</span><span>课后作业</span><span>操作</span></div><div id="batch-rows"></div></div>'+
    '<div class="batch-actions"><button type="button" id="batch-add">＋ 添加一行</button><button type="button" class="primary" id="batch-generate">批量保存并生成链接</button><span class="batch-status" id="batch-status" role="status"></span></div>'+
@@ -45,7 +45,7 @@ window.SFKBatch=(()=>{
   function saveDraft(){clearTimeout(draftTimer);draftTimer=setTimeout(()=>{try{localStorage.setItem(DRAFT,JSON.stringify({defaults,rows:rows.map(r=>({studentName:r.studentName,courseName:r.courseName,lessonDate:r.lessonDate,checkIn:r.checkIn,checkOut:r.checkOut,lessonNumber:r.lessonNumber,content:r.content,homework:r.homework,previousHomework:r.previousHomework}))}));}catch{}},300);}
 
   function buildMentor(){const d=defaults.mentor;if(d&&signaturePresent(d)&&d.mode==='image')return d;const text=$('b-mentor').value.trim();return text?{mode:'text',text,image:null,strokes:[],loading:false,revision:0}:blankSignature();}
-  function buildRecord(row){const rec=initialRecord();rec.studentName=row.studentName.trim();rec.courseName=row.courseName||defaults.courseName;rec.lessonDate=row.lessonDate||defaults.lessonDate;rec.lessonNumber=row.lessonNumber||'';rec.checkIn=row.checkIn||defaults.checkIn;rec.checkOut=row.checkOut||defaults.checkOut;rec.content=row.content;rec.homework=row.homework;rec.previousHomework=row.previousHomework||null;rec.signatures.mentor=buildMentor();rec.signatures.student=blankSignature();return rec;}
+  function buildRecord(row){const rec=initialRecord();rec.studentName=row.studentName.trim();rec.courseName=row.courseName||defaults.courseName;rec.lessonDate=row.lessonDate||defaults.lessonDate;rec.lessonNumber=row.lessonNumber||'';rec.checkIn=row.checkIn||defaults.checkIn;rec.checkOut=row.checkOut||defaults.checkOut;rec.content=row.content;rec.homework=row.homework;rec.previousHomework=row.previousHomework||null;rec.teacherName=$('b-mentor').value.trim();rec.signatures.mentor=buildMentor();rec.signatures.student=blankSignature();return rec;}
 
   function el(tag,cls,label){const e=document.createElement(tag);if(cls)e.className=cls;if(label)e.setAttribute('data-label',label);return e;}
   function input(val){const i=document.createElement('input');i.value=val||'';return i;}
@@ -116,7 +116,7 @@ window.SFKBatch=(()=>{
       const row=rows[i];if(!row.studentName.trim())continue;
       status('正在保存 '+(i+1)+' / '+rows.length+' …');
       try{
-        const record=await cloud.compactRecord(buildRecord(row));record.teacherName=(record.signatures.mentor.text||'').trim();
+        const record=await cloud.compactRecord(buildRecord(row));if(!record.teacherName)record.teacherName=(record.signatures.mentor.text||'').trim();
         row.id=row.id||crypto.randomUUID();
         const saved=await repo.save(row.id,row.revision||0,record);
         row.id=saved.id;row.revision=saved.revision;
@@ -129,7 +129,7 @@ window.SFKBatch=(()=>{
       }catch(e){row.status='error';row.error=e.message;fail.push((row.studentName||'未命名')+'：'+e.message);}
       draw();
     }
-    D.remember(defaults.courseName,buildMentor());
+    D.remember(defaults.courseName,buildMentor(),$('b-mentor').value.trim());
     status('已生成 '+ok+' 份'+(fail.length?'；失败 '+fail.length+' 份：'+fail.join('；'):'')+(cloud.configured?'':'（本地预览模式，未生成链接）'));
     $('batch-exportall').hidden=!(ok&&cloud.configured);
     try{localStorage.removeItem(DRAFT);}catch{}
@@ -145,12 +145,14 @@ window.SFKBatch=(()=>{
     const d=D.read();
     if(d.courseName)defaults.courseName=d.courseName;
     defaults.mentor=d.mentor||null;
+    defaults.teacherName=d.teacherName||(d.mentor&&d.mentor.mode==='text'&&d.mentor.text)||'';
     $('b-course').value=defaults.courseName;
     $('b-date').value=defaults.lessonDate;
     timeOptions($('b-in'),defaults.checkIn);timeOptions($('b-out'),defaults.checkOut);
     const mentorMode=defaults.mentor&&defaults.mentor.mode;
-    if(mentorMode==='image'){$('b-mentor').value='';$('b-mentor').placeholder='使用上次的图片签名';$('b-mentor-note').textContent='上次保存的是图片签名，将直接复用到每份签单。';}
-    else{$('b-mentor').value=defaults.mentor&&defaults.mentor.text||'';$('b-mentor-note').textContent='';}
+    if(mentorMode==='image'){$('b-mentor-note').textContent='签名使用上次的图片签名；上面的姓名会作为导师姓名保存，用于首页检索。';}
+    else{$('b-mentor-note').textContent='';}
+    $('b-mentor').value=defaults.teacherName||'';
     if(!rows.length){rows=[newRow()];pageIndex=0;}
     document.querySelector('main.layout').hidden=true;
     const dash=document.getElementById('dashboard');if(dash)dash.hidden=true;
@@ -173,7 +175,7 @@ window.SFKBatch=(()=>{
   $('b-date').onchange=()=>{defaults.lessonDate=$('b-date').value;saveDraft();};
   $('b-in').onchange=()=>{defaults.checkIn=$('b-in').value;saveDraft();};
   $('b-out').onchange=()=>{defaults.checkOut=$('b-out').value;saveDraft();};
-  $('b-mentor').oninput=()=>{defaults.mentor=null;saveDraft();};
+  $('b-mentor').oninput=()=>{defaults.teacherName=$('b-mentor').value;saveDraft();};
   window.addEventListener('resize',applyPager);
 
   return {show,hide,view};

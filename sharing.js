@@ -1,12 +1,12 @@
 /* Editor layout, hydration and student route; persistence is in cloud.js. */
 'use strict';
 window.SFKEditor=(()=>{
- const fields=['studentName','courseName','lessonDate','lessonNumber','checkIn','checkOut','content','homework'];
+ const fields=['studentName','teacherName','courseName','lessonDate','lessonNumber','checkIn','checkOut','content','homework'];
  const notes=$('notes-title').closest('section'),metadata=$('basic-title').closest('section'),signatures=$('sign-title').closest('section');
  metadata.append(notes.querySelector('fieldset'));notes.insertBefore($('course-field'),$('content').previousElementSibling);$('course-field').style.marginBottom='22px';
  const name=document.createElement('div');name.style.marginBottom='22px';name.innerHTML='<label for="studentName">学生姓名</label><input id="studentName" name="studentName" maxlength="80" placeholder="用于查找学生签单">';$('course-field').after(name);state.studentName='';$('studentName').oninput=()=>state.studentName=$('studentName').value;
  $('notes-title').innerHTML='<span class="num">01</span>课程与作业';$('basic-title').innerHTML='<span class="num">03</span>其他课程信息';$('sign-title').innerHTML='<span class="num">04</span>学生签名';
- const mentorSection=document.createElement('section');mentorSection.className='section';mentorSection.innerHTML='<h2><span class="num">02</span>导师签名</h2>';mentorSection.append($('mentor-name').closest('fieldset'));
+ const mentorSection=document.createElement('section');mentorSection.className='section';mentorSection.innerHTML='<h2><span class="num">02</span>导师签名</h2><div style="margin-bottom:18px"><label for="teacherName">导师姓名（首页按此检索）</label><input id="teacherName" name="teacherName" maxlength="24" placeholder="输入你的姓名，不同老师各筛各的" autocomplete="off"></div>';mentorSection.append($('mentor-name').closest('fieldset'));state.teacherName=state.teacherName||'';const tName=mentorSection.querySelector('#teacherName');tName.oninput=()=>{state.teacherName=tName.value;clearReview();};
  const share=document.createElement('section');share.className='section';share.id='share-section';share.innerHTML='<h2 id="share-title">请学生签名</h2><p class="hint" id="share-help">生成链接发给学生，学生提交签名后，管理页和签单预览自动更新。</p><div class="actions"><button type="button" class="primary" id="generate-share">生成学生签名链接</button></div><p id="share-status" class="message" role="status"></p><div id="share-result" hidden><label for="share-url">签名链接（30 天内有效）</label><input id="share-url" readonly><div class="actions"><button type="button" id="copy-share">复制链接</button><a id="open-share" target="_blank" rel="noopener noreferrer" style="padding:12px">打开签名页</a></div></div><p class="hint" id="share-boundary">仅发送给对应学生。修改课程记录并保存后，原链接失效，需要重新生成。</p>';
  form.replaceChildren(notes,mentorSection,share,metadata,signatures);
  document.querySelector('aside.preview > p.hint').textContent='云端只保存文字和轻量签名，整张签单在浏览器生成。打印选择 A4、100% 比例并关闭页眉页脚。';
