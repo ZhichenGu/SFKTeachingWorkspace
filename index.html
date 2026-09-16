@@ -47,9 +47,9 @@ const blankSignature=()=>({mode:'text',text:'',image:null,strokes:[],loading:fal
 const dateLocal=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const clockText=n=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).padStart(2,'0')}`;
 function initialRecord(now=new Date()){
-  // After-class default: nearest half hour as checkout; preceding 90 minutes as checkin.
+  // After-class default: nearest half hour as checkout; preceding 60 minutes as checkin.
   const end=Math.min(1410,Math.max(30,Math.round((now.getHours()*60+now.getMinutes())/30)*30));
-  return {schemaVersion:1,courseName:'项目课',lessonDate:dateLocal(now),lessonNumber:'',checkIn:clockText(Math.max(0,end-90)),checkOut:clockText(end),content:'',homework:'',previousHomework:null,signatures:{student:blankSignature(),mentor:blankSignature()}};
+  return {schemaVersion:1,courseName:'项目课',lessonDate:dateLocal(now),lessonNumber:'',checkIn:clockText(Math.max(0,end-60)),checkOut:clockText(end),content:'',homework:'',previousHomework:null,signatures:{student:blankSignature(),mentor:blankSignature()}};
 }
 const state=initialRecord();
 const recordState=state;
@@ -73,7 +73,7 @@ const label=(txt,x,y,size=18)=>parts.push(`<text x="${x}" y="${y}" text-anchor="
 label('课程名称',86,251);label('上课日期',86,317);label(`第（${escapeXML(state.lessonNumber)}）次课`,300,317,17);label('check in',405,317,17);label('check out',606,317,17);label('上课内容',86,501);label('课后作业',86,784);label('上节课作业是否按时按量完成',196,950,17);label(`是（ ${state.previousHomework==='yes'?'✓':'　'} ）`,456,950,19);label(`否（ ${state.previousHomework==='no'?'✓':'　'} ）`,657,950,19);
 add(state.courseName,152,229,594,44,'课程名称');add(state.lessonDate,144,299,92,40,'上课日期',{size:15,min:12,center:true});add(state.checkIn,455,296,95,42,'开始时间',{center:true});add(state.checkOut+(state.checkIn&&state.checkOut&&state.checkOut<state.checkIn?'\n次日':''),661,289,95,48,'结束时间',{center:true,size:19,min:12});add(state.content,157,362,582,268,'上课内容');add(state.homework,157,669,582,214,'课后作业');parts.push(`<text x="45" y="1013" font-size="18">学生签名：</text><text x="370" y="1013" font-size="18">导师签名：</text>`);parts.push(signatureSVG(state.signatures.student,60,1019,282,52),signatureSVG(state.signatures.mentor,388,1019,352,52),'</g></g></svg>');return {svg:parts.join(''),overflow};}
 let currentDocument;
-function render(){currentDocument=renderDocument();$('live-paper').innerHTML=currentDocument.svg;$('print-paper').innerHTML=currentDocument.svg;if($('preview-dialog').open)$('large-paper').innerHTML=currentDocument.svg;const a=state.checkIn,b=state.checkOut;$('timeHint').textContent=a&&b&&b<a?'结束早于开始：按次日结束处理，导出时间会标注「次日」。':'默认结束时间取当前最近的半小时，开始时间向前 90 分钟；可展开选择。';}
+function render(){currentDocument=renderDocument();$('live-paper').innerHTML=currentDocument.svg;$('print-paper').innerHTML=currentDocument.svg;if($('preview-dialog').open)$('large-paper').innerHTML=currentDocument.svg;const a=state.checkIn,b=state.checkOut;$('timeHint').textContent=a&&b&&b<a?'结束早于开始：按次日结束处理，导出时间会标注「次日」。':'默认结束时间取当前最近的半小时，开始时间向前 60 分钟；可展开选择。';}
 const form=$('record-form');for(const key of ['checkIn','checkOut']){const el=$(key);el.add(new Option('暂不填写',''));for(let n=0;n<1440;n+=30)el.add(new Option(clockText(n),clockText(n)));}
 for(const key of ['courseName','lessonDate','lessonNumber','checkIn','checkOut','content','homework']){$(key).value=state[key];$(key).addEventListener('input',()=>{state[key]=$(key).value;clearReview();render();});}
 form.addEventListener('submit',e=>e.preventDefault());form.addEventListener('change',e=>{if(e.target.name==='previousHomework'){state.previousHomework=e.target.value;clearReview();render();}});$('unset-homework').onclick=()=>{state.previousHomework=null;form.querySelectorAll('[name=previousHomework]').forEach(e=>e.checked=false);clearReview();render();};

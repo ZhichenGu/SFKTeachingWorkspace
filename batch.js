@@ -51,7 +51,7 @@ window.SFKBatch=(()=>{
   function input(val){const i=document.createElement('input');i.value=val||'';return i;}
 
   function renderRow(row,index){
-    const box=el('div','batch-row'+(row.status==='linked'?' done':''));
+    const box=el('div','batch-row expanded'+(row.status==='linked'?' done':''));
     box.dataset.key=row.key;
     const name=input(row.studentName);name.setAttribute('list','batch-names');name.placeholder='姓名';name.autocomplete='off';
     const course=document.createElement('select');course.innerHTML='<option value="">继承默认</option><option value="项目课">项目课</option><option value="基础/软件课">基础/软件课</option>';course.value=row.courseName||'';
