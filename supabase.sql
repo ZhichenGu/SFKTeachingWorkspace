@@ -1,9 +1,10 @@
 -- Run once in Supabase SQL Editor. Re-running keeps existing records.
--- Owner reads are protected by RLS. All writes go through narrowly scoped RPCs.
+-- Public shared workspace, explicitly requested by the owner: no login.
+-- Everyone may read/manage records. Writes still go through validating RPCs.
 begin;
 create table if not exists public.lesson_records (
  id uuid primary key,
- owner_id uuid not null references auth.users(id) on delete cascade,
+ owner_id uuid references auth.users(id) on delete set null,
  record jsonb not null,
  student_name text generated always as (record->>'studentName') stored,
  lesson_date text generated always as (record->>'lessonDate') stored,
@@ -18,11 +19,13 @@ create table if not exists public.lesson_records (
  constraint lesson_record_size check (octet_length(record::text)<=100000)
 );
 create index if not exists lesson_owner_date on public.lesson_records(owner_id,lesson_date desc);
+alter table public.lesson_records alter column owner_id drop not null;
 alter table public.lesson_records enable row level security;
 revoke all on public.lesson_records from anon, authenticated;
-grant select on public.lesson_records to authenticated;
+grant select on public.lesson_records to anon, authenticated;
 drop policy if exists lesson_owner_read on public.lesson_records;
-create policy lesson_owner_read on public.lesson_records for select to authenticated using ((select auth.uid())=owner_id);
+drop policy if exists lesson_public_read on public.lesson_records;
+create policy lesson_public_read on public.lesson_records for select to anon, authenticated using (true);
 
 create or replace function public.sfk_signature_valid(s jsonb) returns boolean
 language plpgsql immutable set search_path='' as $$
@@ -70,11 +73,9 @@ create or replace function public.save_lesson(p_id uuid,p_expected_revision inte
 language plpgsql security definer set search_path='' as $$
 declare existing public.lesson_records; result public.lesson_records; cleaned jsonb:=p_record; changed boolean:=false;
 begin
- if auth.uid() is null then raise exception '请先登录老师账号'; end if;
  if not public.sfk_record_valid(p_record) then raise exception '记录格式不正确或签名超过 16 KB'; end if;
  select * into existing from public.lesson_records where id=p_id for update;
  if found then
-  if existing.owner_id<>auth.uid() then raise exception '无法访问这份记录'; end if;
   if existing.revision<>p_expected_revision then raise exception '记录已被更新，请返回管理页重新打开，避免覆盖学生签名'; end if;
   changed:=(existing.record #- '{signatures,student}')<>(cleaned #- '{signatures,student}');
   if changed and existing.signed_at is not null then
@@ -89,7 +90,7 @@ begin
    where id=p_id returning * into result;
  else
   if p_expected_revision<>0 then raise exception '记录已删除，请新建签单'; end if;
-  insert into public.lesson_records(id,owner_id,record,signed_at) values(p_id,auth.uid(),cleaned,
+  insert into public.lesson_records(id,owner_id,record,signed_at) values(p_id,null,cleaned,
    case when public.sfk_signature_present(cleaned#>'{signatures,student}') then now() else null end) returning * into result;
  end if;
  return jsonb_build_object('id',result.id,'record',result.record,'revision',result.revision,'signed_at',result.signed_at,'updated_at',result.updated_at);
@@ -99,8 +100,8 @@ create or replace function public.publish_lesson(p_id uuid) returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare r public.lesson_records;
 begin
- select * into r from public.lesson_records where id=p_id and owner_id=auth.uid() for update;
- if not found then raise exception '找不到记录或未登录'; end if;
+ select * into r from public.lesson_records where id=p_id for update;
+ if not found then raise exception '找不到这份记录'; end if;
  -- Repeated generation reuses a live token, so uncertain calls cannot create duplicates.
  if r.share_token is null or r.share_expires_at<=now() then
   update public.lesson_records set share_token=gen_random_uuid(),share_expires_at=now()+interval '30 days' where id=p_id returning * into r;
@@ -132,11 +133,10 @@ end $$;
 create or replace function public.delete_lesson(p_id uuid) returns void
 language plpgsql security definer set search_path='' as $$
 begin
- if auth.uid() is null then raise exception '请先登录'; end if;
- delete from public.lesson_records where id=p_id and owner_id=auth.uid();
+ delete from public.lesson_records where id=p_id;
 end $$;
 
 revoke all on function public.sfk_signature_valid(jsonb),public.sfk_signature_present(jsonb),public.sfk_record_valid(jsonb),public.save_lesson(uuid,integer,jsonb),public.publish_lesson(uuid),public.get_shared_lesson(uuid),public.submit_lesson_signature(uuid,jsonb),public.delete_lesson(uuid) from public,anon,authenticated;
-grant execute on function public.save_lesson(uuid,integer,jsonb),public.publish_lesson(uuid),public.delete_lesson(uuid) to authenticated;
+grant execute on function public.save_lesson(uuid,integer,jsonb),public.publish_lesson(uuid),public.delete_lesson(uuid) to anon,authenticated;
 grant execute on function public.get_shared_lesson(uuid),public.submit_lesson_signature(uuid,jsonb) to anon,authenticated;
 commit;
