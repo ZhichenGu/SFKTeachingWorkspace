@@ -2,9 +2,22 @@
 -- Public shared workspace, explicitly requested by the owner: no login.
 -- Everyone may read/manage records. Writes still go through validating RPCs.
 begin;
+create table if not exists public.teachers (
+ id uuid primary key default gen_random_uuid(),
+ name text not null unique,
+ created_at timestamptz not null default now(),
+ constraint teacher_name_len check (length(name) between 1 and 24)
+);
+alter table public.teachers enable row level security;
+revoke all on public.teachers from anon, authenticated;
+grant select on public.teachers to anon, authenticated;
+drop policy if exists teacher_public_read on public.teachers;
+create policy teacher_public_read on public.teachers for select to anon, authenticated using (true);
+
 create table if not exists public.lesson_records (
  id uuid primary key,
  owner_id uuid references auth.users(id) on delete set null,
+ teacher_id uuid,
  record jsonb not null,
  student_name text generated always as (record->>'studentName') stored,
  lesson_date text generated always as (record->>'lessonDate') stored,
@@ -23,6 +36,7 @@ create index if not exists lesson_owner_date on public.lesson_records(owner_id,l
 alter table public.lesson_records alter column owner_id drop not null;
 alter table public.lesson_records drop column if exists teacher_name;
 alter table public.lesson_records add column teacher_name text generated always as (record->>'teacherName') stored;
+alter table public.lesson_records add column if not exists teacher_id uuid;
 alter table public.lesson_records enable row level security;
 revoke all on public.lesson_records from anon, authenticated;
 grant select on public.lesson_records to anon, authenticated;
@@ -72,7 +86,7 @@ begin
 exception when others then return false;
 end $$;
 
-create or replace function public.save_lesson(p_id uuid,p_expected_revision integer,p_record jsonb) returns jsonb
+create or replace function public.save_lesson(p_id uuid,p_expected_revision integer,p_record jsonb,p_teacher_id uuid) returns jsonb
 language plpgsql security definer set search_path='' as $$
 declare existing public.lesson_records; result public.lesson_records; cleaned jsonb:=p_record; changed boolean:=false;
 begin
@@ -93,10 +107,22 @@ begin
    where id=p_id returning * into result;
  else
   if p_expected_revision<>0 then raise exception '记录已删除，请新建签单'; end if;
-  insert into public.lesson_records(id,owner_id,record,signed_at) values(p_id,null,cleaned,
+  insert into public.lesson_records(id,owner_id,teacher_id,record,signed_at) values(p_id,null,p_teacher_id,cleaned,
    case when public.sfk_signature_present(cleaned#>'{signatures,student}') then now() else null end) returning * into result;
  end if;
  return jsonb_build_object('id',result.id,'record',result.record,'revision',result.revision,'signed_at',result.signed_at,'updated_at',result.updated_at);
+end $$;
+
+create or replace function public.add_teacher(p_name text) returns jsonb
+language plpgsql security definer set search_path='' as $$
+declare t public.teachers;
+begin
+ if p_name is null or length(btrim(p_name))=0 or length(p_name)>24 then raise exception '教师姓名需为 1-24 个字符'; end if;
+ select * into t from public.teachers where name=p_name;
+ if not found then
+  insert into public.teachers(name) values(p_name) returning * into t;
+ end if;
+ return jsonb_build_object('id',t.id,'name',t.name);
 end $$;
 
 create or replace function public.publish_lesson(p_id uuid) returns jsonb
@@ -139,7 +165,7 @@ begin
  delete from public.lesson_records where id=p_id;
 end $$;
 
-revoke all on function public.sfk_signature_valid(jsonb),public.sfk_signature_present(jsonb),public.sfk_record_valid(jsonb),public.save_lesson(uuid,integer,jsonb),public.publish_lesson(uuid),public.get_shared_lesson(uuid),public.submit_lesson_signature(uuid,jsonb),public.delete_lesson(uuid) from public,anon,authenticated;
-grant execute on function public.save_lesson(uuid,integer,jsonb),public.publish_lesson(uuid),public.delete_lesson(uuid) to anon,authenticated;
+revoke all on function public.sfk_signature_valid(jsonb),public.sfk_signature_present(jsonb),public.sfk_record_valid(jsonb),public.save_lesson(uuid,integer,jsonb,uuid),public.add_teacher(text),public.publish_lesson(uuid),public.get_shared_lesson(uuid),public.submit_lesson_signature(uuid,jsonb),public.delete_lesson(uuid) from public,anon,authenticated;
+grant execute on function public.save_lesson(uuid,integer,jsonb,uuid),public.add_teacher(text),public.publish_lesson(uuid),public.delete_lesson(uuid) to anon,authenticated;
 grant execute on function public.get_shared_lesson(uuid),public.submit_lesson_signature(uuid,jsonb) to anon,authenticated;
 commit;

@@ -37,9 +37,11 @@ window.SFKCloud = (() => {
     for(const role of ['mentor','student']){const s=raw.signatures?.[role],sig=blankSignature();if(!s||!['text','image'].includes(s.mode))throw Error('签名格式不正确。');sig.mode=s.mode;if(s.mode==='text'){if(typeof s.text!=='string'||s.text.length>24)throw Error('姓名签名格式不正确。');sig.text=s.text;}if(s.mode==='image'&&s.image){if(typeof s.image!=='string'||s.image.length>23000||!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+=*$/.test(s.image))throw Error('图片签名格式不正确。');sig.image=s.image;}if(typeof s.text==='string'&&s.text.length<=24)sig.text=s.text;clean.signatures[role]=sig;}return clean;
   }
   return {configured,compactSignature,compactRecord,cleanRecord,
-    async list(){const rows=[];for(let offset=0;;offset+=1000){const page=await request('/rest/v1/lesson_records?select=id,student_name,teacher_name,lesson_date,check_in,course_name,signed_at,revision,updated_at&order=lesson_date.desc,check_in.desc,id&limit=1000&offset='+offset);rows.push(...page);if(page.length<1000)return rows;}},
+    async list(teacherId){const rows=[];const filter=teacherId?('&teacher_id=eq.'+encodeURIComponent(teacherId)):'';for(let offset=0;;offset+=1000){const page=await request('/rest/v1/lesson_records?select=id,student_name,teacher_name,lesson_date,check_in,course_name,signed_at,revision,updated_at'+filter+'&order=lesson_date.desc,check_in.desc,id&limit=1000&offset='+offset);rows.push(...page);if(page.length<1000)return rows;}},
     async get(id){const rows=await request('/rest/v1/lesson_records?id=eq.'+encodeURIComponent(id)+'&select=id,record,revision,signed_at,updated_at,share_token,share_expires_at');if(!rows?.length)throw Error('没有找到这份签单。');rows[0].published=!!(rows[0].share_token&&new Date(rows[0].share_expires_at)>new Date());rows[0].record=cleanRecord(rows[0].record);return rows[0];},
-    save:(id,revision,record)=>rpc('save_lesson',{p_id:id,p_expected_revision:revision,p_record:record}),
+    save:(id,revision,record,teacherId)=>rpc('save_lesson',{p_id:id,p_expected_revision:revision,p_record:record,p_teacher_id:teacherId||null}),
     remove:id=>rpc('delete_lesson',{p_id:id}),
-    publish:id=>rpc('publish_lesson',{p_id:id}),getShared:token=>rpc('get_shared_lesson',{p_token:token}),submit:(token,signature)=>rpc('submit_lesson_signature',{p_token:token,p_signature:signature})};
+    publish:id=>rpc('publish_lesson',{p_id:id}),getShared:token=>rpc('get_shared_lesson',{p_token:token}),submit:(token,signature)=>rpc('submit_lesson_signature',{p_token:token,p_signature:signature}),
+    async listTeachers(){const rows=await request('/rest/v1/teachers?select=id,name&order=name');return rows;},
+    addTeacher:name=>rpc('add_teacher',{p_name:name})};
 })();

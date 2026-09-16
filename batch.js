@@ -118,7 +118,7 @@ window.SFKBatch=(()=>{
       try{
         const record=await cloud.compactRecord(buildRecord(row));if(!record.teacherName)record.teacherName=(record.signatures.mentor.text||'').trim();
         row.id=row.id||crypto.randomUUID();
-        const saved=await repo.save(row.id,row.revision||0,record);
+        const saved=await repo.save(row.id,row.revision||0,record,window.SFKUser&&SFKUser.current()?SFKUser.current().id:null);
         row.id=saved.id;row.revision=saved.revision;
         if(cloud.configured){
           const share=await cloud.publish(saved.id);
@@ -129,7 +129,7 @@ window.SFKBatch=(()=>{
       }catch(e){row.status='error';row.error=e.message;fail.push((row.studentName||'未命名')+'：'+e.message);}
       draw();
     }
-    D.remember(defaults.courseName,buildMentor(),$('b-mentor').value.trim());
+    D.remember(defaults.courseName,(window.SFKUser&&SFKUser.current())?null:buildMentor(),(window.SFKUser&&SFKUser.current())?null:$('b-mentor').value.trim());
     status('已生成 '+ok+' 份'+(fail.length?'；失败 '+fail.length+' 份：'+fail.join('；'):'')+(cloud.configured?'':'（本地预览模式，未生成链接）'));
     $('batch-exportall').hidden=!(ok&&cloud.configured);
     try{localStorage.removeItem(DRAFT);}catch{}
@@ -145,7 +145,7 @@ window.SFKBatch=(()=>{
     const d=D.read();
     if(d.courseName)defaults.courseName=d.courseName;
     defaults.mentor=d.mentor||null;
-    defaults.teacherName=d.teacherName||(d.mentor&&d.mentor.mode==='text'&&d.mentor.text)||'';
+    defaults.teacherName=d.teacherName||(d.mentor&&d.mentor.mode==='text'&&d.mentor.text)||'';if(window.SFKUser&&SFKUser.current()){defaults.teacherName=SFKUser.current().name;defaults.mentor=null;}
     $('b-course').value=defaults.courseName;
     $('b-date').value=defaults.lessonDate;
     timeOptions($('b-in'),defaults.checkIn);timeOptions($('b-out'),defaults.checkOut);
