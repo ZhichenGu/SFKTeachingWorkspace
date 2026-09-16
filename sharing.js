@@ -1,0 +1,29 @@
+/* Editor layout, hydration and student route; persistence is in cloud.js. */
+'use strict';
+window.SFKEditor=(()=>{
+ const fields=['studentName','courseName','lessonDate','lessonNumber','checkIn','checkOut','content','homework'];
+ const notes=$('notes-title').closest('section'),metadata=$('basic-title').closest('section'),signatures=$('sign-title').closest('section');
+ metadata.append(notes.querySelector('fieldset'));notes.insertBefore($('course-field'),$('content').previousElementSibling);$('course-field').style.marginBottom='22px';
+ const name=document.createElement('div');name.style.marginBottom='22px';name.innerHTML='<label for="studentName">学生姓名</label><input id="studentName" name="studentName" maxlength="80" placeholder="用于查找学生签单">';$('course-field').after(name);state.studentName='';$('studentName').oninput=()=>state.studentName=$('studentName').value;
+ $('notes-title').innerHTML='<span class="num">01</span>课程与作业';$('basic-title').innerHTML='<span class="num">03</span>其他课程信息';$('sign-title').innerHTML='<span class="num">04</span>学生签名';
+ const mentorSection=document.createElement('section');mentorSection.className='section';mentorSection.innerHTML='<h2><span class="num">02</span>导师签名</h2>';mentorSection.append($('mentor-name').closest('fieldset'));
+ const share=document.createElement('section');share.className='section';share.id='share-section';share.innerHTML='<h2 id="share-title">请学生签名</h2><p class="hint" id="share-help">生成链接发给学生，学生提交签名后，管理页和签单预览自动更新。</p><div class="actions"><button type="button" class="primary" id="generate-share">生成学生签名链接</button></div><p id="share-status" class="message" role="status"></p><div id="share-result" hidden><label for="share-url">签名链接（30 天内有效）</label><input id="share-url" readonly><div class="actions"><button type="button" id="copy-share">复制链接</button><a id="open-share" target="_blank" rel="noopener noreferrer" style="padding:12px">打开签名页</a></div></div><p class="hint" id="share-boundary">仅发送给对应学生。修改课程记录并保存后，原链接失效，需要重新生成。</p>';
+ form.replaceChildren(notes,mentorSection,share,metadata,signatures);
+ document.querySelector('aside.preview > p.hint').textContent='云端只保存文字和轻量签名，整张签单在浏览器生成。打印选择 A4、100% 比例并关闭页眉页脚。';
+ function signature(role,value){const old=$(role+'-name').closest('fieldset'),parent=old.parentElement;old.remove();state.signatures[role]=value;mountSignature(role,role==='student'?'学生签名':'导师签名');const editor=$(role+'-name').closest('fieldset');parent.append(editor);$(role+'-name').value=value.text;editor.querySelector('[data-name-preview]').textContent=value.text;if(value.image){const img=new Image();img.src=value.image;img.alt='签名图片';editor.querySelector('[data-image-preview]').replaceChildren(img);}editor.querySelector(`[data-mode="${value.mode}"]`).click();}
+ function load(record){Object.assign(state,JSON.parse(JSON.stringify(record)));for(const key of fields)$(key).value=state[key]||'';form.querySelectorAll('[name=previousHomework]').forEach(el=>el.checked=el.value===state.previousHomework);for(const role of ['student','mentor'])signature(role,state.signatures[role]);clearReview();render();}
+ $('copy-share').onclick=async()=>{try{await navigator.clipboard.writeText($('share-url').value);$('share-status').textContent='链接已复制。';}catch{$('share-url').focus();$('share-url').select();$('share-status').textContent='已选中链接，请手动复制。';}};
+ async function studentRoute(token){
+  const main=document.querySelector('main.layout'),notice=document.createElement('section');notice.className='section';notice.setAttribute('role','status');notice.textContent='正在加载课程记录…';main.before(notice);main.hidden=true;
+  try{
+   if(!/^[a-f0-9-]{36}$/i.test(token))throw Error('签名链接不完整，请让老师重新发送。');
+   const data=await SFKCloud.getShared(token);load(SFKCloud.cleanRecord(data.record));document.querySelector('h1').textContent='确认课程并签名';document.title='学生签名 · 课程记录';form.prepend(signatures,share);$('sign-title').textContent=state.studentName+' · 学生签名';
+   form.querySelectorAll('input,textarea,select,button').forEach(el=>el.disabled=true);const student=$('student-name').closest('fieldset');student.querySelectorAll('input,button').forEach(el=>el.disabled=false);student.querySelector('[data-mode="draw"]').click();$('mentor-name').closest('fieldset').querySelector('canvas').style.pointerEvents='none';$('generate-share').disabled=false;
+   $('share-title').textContent='提交给老师';$('generate-share').textContent='确认并提交签名';$('share-help').textContent='请先查看课程记录，确认后签名并提交。老师端将自动更新。';$('share-boundary').textContent='每个链接只接受一次签名；需要重签请联系老师。提交后也可下载签单留存。';notice.textContent='请核对签单中的课程内容和作业，再完成签名。';main.hidden=false;
+   const complete=record=>{signature('student',record.signatures.student);render();const editor=$('student-name').closest('fieldset');editor.querySelectorAll('input,button').forEach(el=>el.disabled=true);editor.querySelector('canvas').style.pointerEvents='none';$('generate-share').disabled=true;$('generate-share').textContent='签名已提交';$('share-status').textContent='老师端已收到签名，你可以下载签单留存。';};
+   if(data.signed_at)complete(SFKCloud.cleanRecord(data.record));
+   let submitting=false;$('generate-share').onclick=async()=>{if(submitting)return;submitting=true;$('generate-share').disabled=true;try{if(!signaturePresent(state.signatures.student))throw Error('请先完成你的签名。');const s=await SFKCloud.compactSignature(state.signatures.student);await SFKCloud.submit(token,s);state.signatures.student=s;complete(state);}catch(error){try{const latest=await SFKCloud.getShared(token);if(latest.signed_at){complete(SFKCloud.cleanRecord(latest.record));return;}}catch{}$('share-status').textContent='提交未确认：'+error.message;$('generate-share').disabled=false;}finally{submitting=false;}};
+  }catch(error){notice.textContent='无法打开签名页面：'+error.message;notice.setAttribute('role','alert');document.querySelectorAll('header [data-action]').forEach(el=>el.disabled=true);}
+ }
+ return {load,signature,studentRoute,fields};
+})();

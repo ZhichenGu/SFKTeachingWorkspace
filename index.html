@@ -17,7 +17,7 @@
 <main class="layout">
 <form id="record-form" novalidate>
 <section class="section" aria-labelledby="basic-title"><h2 id="basic-title"><span class="num">01</span>课程信息</h2><div class="grid">
-<div class="wide"><label for="courseName">课程名称</label><input id="courseName" name="courseName" placeholder="例如：交互装置 · 项目一" maxlength="120"></div>
+<div class="wide" id="course-field"><label for="courseName">课程名称</label><select id="courseName" name="courseName"><option value="项目课">项目课</option><option value="基础/软件课">基础/软件课</option></select></div>
 <div><label for="lessonDate">上课日期</label><input id="lessonDate" name="lessonDate" type="date"></div>
 <div><label for="lessonNumber">第几次课</label><input id="lessonNumber" name="lessonNumber" type="number" min="1" max="999" step="1" inputmode="numeric" placeholder="例如：3"></div>
 <div><label for="checkIn">Check in · 开始时间</label><select id="checkIn" name="checkIn"></select></div>
@@ -48,9 +48,10 @@ const clockText=n=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).p
 function initialRecord(now=new Date()){
   // After-class default: nearest half hour as checkout; preceding 90 minutes as checkin.
   const end=Math.min(1410,Math.max(30,Math.round((now.getHours()*60+now.getMinutes())/30)*30));
-  return {schemaVersion:1,courseName:'',lessonDate:dateLocal(now),lessonNumber:'',checkIn:clockText(Math.max(0,end-90)),checkOut:clockText(end),content:'',homework:'',previousHomework:null,signatures:{student:blankSignature(),mentor:blankSignature()}};
+  return {schemaVersion:1,courseName:'项目课',lessonDate:dateLocal(now),lessonNumber:'',checkIn:clockText(Math.max(0,end-90)),checkOut:clockText(end),content:'',homework:'',previousHomework:null,signatures:{student:blankSignature(),mentor:blankSignature()}};
 }
 const state=initialRecord();
+const recordState=state;
 const $=id=>document.getElementById(id);
 const escapeXML=s=>String(s??'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c]));
 const handFont='Kaiti SC,STKaiti,KaiTi,AR PL UKai CN,Segoe Print,cursive';
@@ -65,7 +66,7 @@ const measure=document.createElement('canvas').getContext('2d');
 function wrapText(value,width,size){measure.font=`${size}px "Songti SC",SimSun,serif`;const lines=[];for(const p of String(value).replace(/\r\n?/g,'\n').split('\n')){let line='';for(const c of Array.from(p)){if(measure.measureText(line+c).width>width&&line){lines.push(line);line=c;}else line+=c;}lines.push(line);}return lines;}
 function textBlock(value,x,y,w,h,{size=19,min=14,center=false}={}){let lines;for(;size>=min;size--){lines=wrapText(value,w,size);if(lines.length*size*1.55<=h)break;}size=Math.max(size,min);lines=wrapText(value,w,size);const overflow=lines.length*size*1.55>h;return {overflow,svg:lines.map((l,i)=>`<text x="${center?x+w/2:x}" y="${y+size+i*size*1.55}" font-size="${size}"${center?' text-anchor="middle"':''}>${escapeXML(l)}</text>`).join('')};}
 function signatureSVG(s,x,y,w,h){if(s.mode==='text'){const size=Math.max(18,Math.min(40,w/Math.max(1,Array.from(s.text).length)));return `<text x="${x+w/2}" y="${y+h*.69}" text-anchor="middle" font-family="${handFont}" font-style="italic" font-size="${size}">${escapeXML(s.text)}</text>`;}if(s.mode==='image'&&s.image)return `<image href="${s.image}" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="xMidYMid meet"/>`;if(s.mode==='draw')return `<svg x="${x}" y="${y}" width="${w}" height="${h}" viewBox="0 0 600 300" preserveAspectRatio="xMidYMid meet">${s.strokes.map(points=>points.length===1?`<circle cx="${points[0][0]*600}" cy="${points[0][1]*300}" r="1.7"/>`:`<polyline points="${points.map(p=>`${p[0]*600},${p[1]*300}`).join(' ')}" fill="none" stroke="#101010" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>`).join('')}</svg>`;return '';}
-function renderDocument(){const parts=[],overflow=[];const add=(v,x,y,w,h,label,opts)=>{const r=textBlock(v,x,y,w,h,opts);parts.push(r.svg);if(r.overflow)overflow.push(label);};
+function renderDocument(state=recordState){const parts=[],overflow=[];const add=(v,x,y,w,h,label,opts)=>{const r=textBlock(v,x,y,w,h,opts);parts.push(r.svg);if(r.overflow)overflow.push(label);};
 parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="794" height="1123" viewBox="0 0 794 1123" role="img" aria-label="1对1课程记录表"><defs><image id="template" href="${templateImage}" width="1603" height="1670"/><clipPath id="page-clip"><rect width="794" height="1123"/></clipPath></defs><g clip-path="url(#page-clip)"><rect width="794" height="1123" fill="white"/><g fill="#000" font-family="Songti SC,SimSun,serif"><svg x="34" y="20" width="108" height="63" viewBox="0 0 190 108"><use href="#template"/></svg><rect x="34" y="90" width="726" height="991" fill="none" stroke="black" stroke-width="1.5"/><svg x="49" y="110" width="93" height="77" viewBox="22 139 178 144"><use href="#template"/></svg><text x="427" y="157" text-anchor="middle" font-size="30" font-weight="bold">1对1课程记录表</text><g stroke="black" stroke-width="1.5"><path d="M34 212H760M34 278H760M34 344H760M34 650H760M34 905H760M34 980H760M138 212V905M242 278V344M359 278V344M452 278V344M554 278V344M658 278V344M359 905V1081M554 905V980" fill="none"/></g>`);
 const label=(txt,x,y,size=18)=>parts.push(`<text x="${x}" y="${y}" text-anchor="middle" font-size="${size}">${txt}</text>`);
 label('课程名称',86,251);label('上课日期',86,317);label(`第（${escapeXML(state.lessonNumber)}）次课`,300,317,17);label('check in',405,317,17);label('check out',606,317,17);label('上课内容',86,501);label('课后作业',86,784);label('上节课作业是否按时按量完成',196,950,17);label(`是（ ${state.previousHomework==='yes'?'✓':'　'} ）`,456,950,19);label(`否（ ${state.previousHomework==='no'?'✓':'　'} ）`,657,950,19);
@@ -98,5 +99,10 @@ async function performExport(kind){const svg=currentDocument.svg;const buttons=[
 document.querySelectorAll('[data-action]').forEach(btn=>btn.onclick=()=>{if(btn.dataset.action==='preview'){render();$('large-paper').innerHTML=currentDocument.svg;$('preview-dialog').showModal();}else requestExport(btn.dataset.action);});$('close-preview').onclick=()=>$('preview-dialog').close();window.addEventListener('beforeprint',render);window.addEventListener('beforeunload',e=>{if(state.courseName||state.content||state.homework||Object.values(state.signatures).some(signaturePresent)){e.preventDefault();e.returnValue='';}});
 render();
 </script>
+<script src="config.js"></script>
+<script src="cloud.js"></script>
+<script src="sharing.js"></script>
+<script src="exports.js"></script>
+<script src="workspace.js"></script>
 </body>
 </html>
