@@ -10,7 +10,7 @@ create table if not exists public.lesson_records (
  lesson_date text generated always as (record->>'lessonDate') stored,
  check_in text generated always as (record->>'checkIn') stored,
  course_name text generated always as (record->>'courseName') stored,
- teacher_name text generated always as (record#>'{signatures,mentor}'->>'text') stored,
+ teacher_name text generated always as (record->>'teacherName') stored,
  revision integer not null default 1,
  share_token uuid unique,
  share_expires_at timestamptz,
@@ -21,7 +21,8 @@ create table if not exists public.lesson_records (
 );
 create index if not exists lesson_owner_date on public.lesson_records(owner_id,lesson_date desc);
 alter table public.lesson_records alter column owner_id drop not null;
-alter table public.lesson_records add column if not exists teacher_name text generated always as (record#>'{signatures,mentor}'->>'text') stored;
+alter table public.lesson_records drop column if exists teacher_name;
+alter table public.lesson_records add column teacher_name text generated always as (record->>'teacherName') stored;
 alter table public.lesson_records enable row level security;
 revoke all on public.lesson_records from anon, authenticated;
 grant select on public.lesson_records to anon, authenticated;

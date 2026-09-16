@@ -49,7 +49,7 @@ const clockText=n=>`${String(Math.floor(n/60)).padStart(2,'0')}:${String(n%60).p
 function initialRecord(now=new Date()){
   // After-class default: nearest half hour as checkout; preceding 60 minutes as checkin.
   const end=Math.min(1410,Math.max(30,Math.round((now.getHours()*60+now.getMinutes())/30)*30));
-  return {schemaVersion:1,courseName:'项目课',lessonDate:dateLocal(now),lessonNumber:'',checkIn:clockText(Math.max(0,end-60)),checkOut:clockText(end),content:'',homework:'',previousHomework:null,signatures:{student:blankSignature(),mentor:blankSignature()}};
+  return {schemaVersion:1,courseName:'项目课',lessonDate:dateLocal(now),lessonNumber:'',checkIn:clockText(Math.max(0,end-60)),checkOut:clockText(end),content:'',homework:'',previousHomework:null,teacherName:'',signatures:{student:blankSignature(),mentor:blankSignature()}};
 }
 const state=initialRecord();
 const recordState=state;

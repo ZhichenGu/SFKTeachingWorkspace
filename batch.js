@@ -116,7 +116,7 @@ window.SFKBatch=(()=>{
       const row=rows[i];if(!row.studentName.trim())continue;
       status('正在保存 '+(i+1)+' / '+rows.length+' …');
       try{
-        const record=await cloud.compactRecord(buildRecord(row));
+        const record=await cloud.compactRecord(buildRecord(row));record.teacherName=(record.signatures.mentor.text||'').trim();
         row.id=row.id||crypto.randomUUID();
         const saved=await repo.save(row.id,row.revision||0,record);
         row.id=saved.id;row.revision=saved.revision;
