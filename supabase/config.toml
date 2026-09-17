@@ -1,0 +1,6 @@
+project_id = "gsbktszybeqhpyirvcaw"
+
+[functions.ocr-schedule]
+# The workspace intentionally has no user login. The function is public, while
+# the Google credential remains server-side in a Supabase Secret.
+verify_jwt = false

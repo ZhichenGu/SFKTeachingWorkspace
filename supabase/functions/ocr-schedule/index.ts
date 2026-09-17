@@ -32,10 +32,24 @@ function flattenWords(annotation) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: '仅支持 POST 请求' }), {
+      status: 405,
+      headers: { ...cors, 'Content-Type': 'application/json' },
+    });
+  }
   try {
     const body = await req.json().catch(() => null);
     if (!body || !body.image) throw new Error('缺少图片');
-    let image = String(body.image).replace(/^data:image\/[a-z+]+;base64,/, '');
+    const source = String(body.image);
+    if (!/^data:image\/(?:jpeg|png);base64,/i.test(source)) {
+      throw new Error('仅支持 JPG / PNG 图片');
+    }
+    const image = source.replace(/^data:image\/[a-z+]+;base64,/i, '');
+    // 10 MB binary ~= 13.4 MB Base64. Reject before forwarding to Google.
+    if (!image || image.length > 14_000_000 || !/^[A-Za-z0-9+/]+=*$/.test(image)) {
+      throw new Error('图片无效或超过 10 MB');
+    }
     const key = Deno.env.get('GOOGLE_VISION_API_KEY');
     if (!key) throw new Error('OCR 尚未配置（缺少 GOOGLE_VISION_API_KEY Secret）');
     const resp = await fetch(
@@ -50,7 +64,9 @@ Deno.serve(async (req) => {
     );
     const data = await resp.json();
     if (!resp.ok) throw new Error((data && data.error && data.error.message) || 'Google Vision 调用失败');
-    const ann = data.responses && data.responses[0] && data.responses[0].fullTextAnnotation;
+    const result = data.responses && data.responses[0];
+    if (result && result.error) throw new Error(result.error.message || 'Google Vision 未能识别图片');
+    const ann = result && result.fullTextAnnotation;
     return new Response(
       JSON.stringify({ text: (ann && ann.text) || '', words: flattenWords(ann) }),
       { headers: { ...cors, 'Content-Type': 'application/json' } }

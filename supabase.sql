@@ -78,7 +78,7 @@ begin
   d:=(r->>'lessonDate')::date;
  end if;
  foreach k in array array['checkIn','checkOut'] loop
-  if r->>k<>'' and r->>k !~ '^([01][0-9]|2[0-3]):(00|30)$' then return false; end if;
+  if r->>k<>'' and r->>k !~ '^([01][0-9]|2[0-3]):([0-5][0-9])$' then return false; end if;
  end loop;
  if r->>'checkIn'<>'' and r->>'checkIn'=r->>'checkOut' then return false; end if;
  if not (r ? 'previousHomework') or r->'previousHomework' not in ('null'::jsonb,'"yes"'::jsonb,'"no"'::jsonb) then return false; end if;

@@ -33,6 +33,7 @@ window.SFKCloud = (() => {
   function cleanRecord(raw){
     if(!raw||typeof raw!=='object')throw Error('记录格式不正确。');const clean=initialRecord(),limits={studentName:80,courseName:120,lessonDate:10,lessonNumber:3,checkIn:5,checkOut:5,content:12000,homework:12000,teacherName:24};if(typeof raw.teacherName!=='string')raw.teacherName=(raw.signatures&&raw.signatures.mentor&&raw.signatures.mentor.text)||'';
     for(const [key,max] of Object.entries(limits)){if(typeof raw[key]!=='string'||raw[key].length>max)throw Error('记录字段不正确。');clean[key]=raw[key];}
+    for(const [key,label] of [['checkIn','开始时间'],['checkOut','结束时间']]){if(clean[key]&&!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(clean[key]))throw Error(label+'格式不正确，请使用 HH:MM');}
     if(!['项目课','基础/软件课'].includes(clean.courseName)||![null,'yes','no'].includes(raw.previousHomework))throw Error('记录选项不正确。');clean.previousHomework=raw.previousHomework;
     for(const role of ['mentor','student']){const s=raw.signatures?.[role],sig=blankSignature();if(!s||!['text','image'].includes(s.mode))throw Error('签名格式不正确。');sig.mode=s.mode;if(s.mode==='text'){if(typeof s.text!=='string'||s.text.length>24)throw Error('姓名签名格式不正确。');sig.text=s.text;}if(s.mode==='image'&&s.image){if(typeof s.image!=='string'||s.image.length>23000||!/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+=*$/.test(s.image))throw Error('图片签名格式不正确。');sig.image=s.image;}if(typeof s.text==='string'&&s.text.length<=24)sig.text=s.text;clean.signatures[role]=sig;}return clean;
   }
@@ -44,5 +45,5 @@ window.SFKCloud = (() => {
     publish:id=>rpc('publish_lesson',{p_id:id}),getShared:token=>rpc('get_shared_lesson',{p_token:token}),submit:(token,signature)=>rpc('submit_lesson_signature',{p_token:token,p_signature:signature}),
     async listTeachers(){const rows=await request('/rest/v1/teachers?select=id,name&order=name');return rows;},
     addTeacher:name=>rpc('add_teacher',{p_name:name}),
-    async ocrSchedule(image){if(!configured)throw Error('请先按 README 配置 Supabase。');const res=await fetch(url+'/functions/v1/ocr-schedule',{method:'POST',headers:{'Content-Type':'application/json',apikey:config.supabasePublishableKey,'Authorization':'Bearer '+config.supabasePublishableKey},body:JSON.stringify({image})});const data=await res.json().catch(()=>null);if(!res.ok)throw Error(data?.error||'OCR 调用失败，请重试。');return data;}};
+    async ocrSchedule(image){if(!configured)throw Error('请先按 README 配置 Supabase。');const res=await fetch(url+'/functions/v1/ocr-schedule',{method:'POST',headers:{'Content-Type':'application/json',apikey:config.supabasePublishableKey},body:JSON.stringify({image})});const data=await res.json().catch(()=>null);if(!res.ok)throw Error(data?.error||'OCR 调用失败，请重试。');return data;}};
 })();
